@@ -6,9 +6,10 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: csi.san.synology.com
 parameters:
-  # dsm: '1.1.1.1'
-  # location: '/volume1'
+  dsm: 'nas.smeets.ee'
+  location: '/volume1'
   protocol: iscsi
   csi.storage.k8s.io/fstype: ext4
+  mountPermissions: '0777'
 reclaimPolicy: Delete
 allowVolumeExpansion: true

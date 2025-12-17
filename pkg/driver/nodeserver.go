@@ -624,6 +624,16 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	// iscsi & smb
+	// Parse mountPermissions for all protocols (not just NFS)
+	var mountPermissionsUint uint64 = 0
+	if mountPerms, ok := req.GetVolumeContext()["mountPermissions"]; ok && mountPerms != "" {
+		var err error
+		mountPermissionsUint, err = strconv.ParseUint(mountPerms, 8, 32)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("invalid mountPermissions %s", mountPerms))
+		}
+	}
+
 	notMount, err := createTargetMountPath(ns.Mounter.Interface, targetPath, isBlock)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -656,6 +666,13 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 			err = ns.Mounter.Interface.Mount(stagingTargetPath, targetPath, fsType, options)
 		}
 		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	// Apply permissions if specified (for iSCSI/SMB)
+	if mountPermissionsUint > 0 && !isBlock {
+		if err := chmodIfPermissionMismatch(stagingTargetPath, os.FileMode(mountPermissionsUint)); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}

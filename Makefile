@@ -1,6 +1,6 @@
 #  Copyright 2021 Synology Inc.
 
-REGISTRY_NAME=ghcr.io/zebernst
+REGISTRY_NAME=ghcr.io/smeetsee
 IMAGE_NAME=synology-csi
 IMAGE_VERSION=v1.2.1
 IMAGE_TAG=$(REGISTRY_NAME)/$(IMAGE_NAME):$(IMAGE_VERSION)
