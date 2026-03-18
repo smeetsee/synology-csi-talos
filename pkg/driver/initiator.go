@@ -124,11 +124,36 @@ func (t *tools) iscsiadm_discovery(portal string) error {
 func (t *tools) iscsiadm_login(iqn, portal string) error {
 	cmd := t.iscsiadm(
 		"-m", "node",
-		"--targetname", iqn,
-		"--portal", portal,
-		"--login")
+		"-T", iqn,
+		"-p", portal,
+		"--login",
+	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if exitErr, ok := err.(utilexec.ExitError); ok && exitErr.ExitStatus() == 19 {
+			// Error 19 = already logged in from a stale session, force logout and retry
+			log.Infof("Stale iSCSI session detected for %s, logging out and retrying", iqn)
+			logoutCmd := t.iscsiadm(
+				"-m", "node",
+				"-T", iqn,
+				"--logout",
+			)
+			if _, logoutErr := logoutCmd.CombinedOutput(); logoutErr != nil {
+				log.Warnf("Failed to logout stale session for %s: %v", iqn, logoutErr)
+			}
+			// Retry login after logout
+			retryCmd := t.iscsiadm(
+				"-m", "node",
+				"-T", iqn,
+				"-p", portal,
+				"--login",
+			)
+			out, err = retryCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("%s (%v)", string(out), err)
+			}
+			return nil
+		}
 		return fmt.Errorf("%s (%v)", string(out), err)
 	}
 	return nil
