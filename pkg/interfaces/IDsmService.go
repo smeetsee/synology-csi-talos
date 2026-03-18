@@ -20,6 +20,7 @@ type IDsmService interface {
 	DeleteVolume(volId string) error
 	ListVolumes() []*models.K8sVolumeRespSpec
 	GetVolume(volId string) *models.K8sVolumeRespSpec
+	DisconnectIscsiSessions(targetIqn string) error
 	ExpandVolume(volId string, newSize int64) (*models.K8sVolumeRespSpec, error)
 	CreateSnapshot(spec *models.CreateK8sVolumeSnapshotSpec) (*models.K8sSnapshotRespSpec, error)
 	DeleteSnapshot(snapshotUuid string) error

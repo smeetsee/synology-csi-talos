@@ -8,9 +8,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	log "github.com/sirupsen/logrus"
+
 	"github.com/SynologyOpenSource/synology-csi/pkg/logger"
 	"github.com/SynologyOpenSource/synology-csi/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 type LunInfo struct {
@@ -53,13 +54,13 @@ type TargetInfo struct {
 }
 
 type SnapshotInfo struct {
-	Name              string             `json:"name"`
-	Uuid              string             `json:"uuid"`
-	ParentUuid        string             `json:"parent_uuid"`
-	Status            string             `json:"status"`
-	TotalSize         int64              `json:"total_size"`
-	CreateTime        int64              `json:"create_time"`
-	RootPath          string             `json:"root_path"`
+	Name       string `json:"name"`
+	Uuid       string `json:"uuid"`
+	ParentUuid string `json:"parent_uuid"`
+	Status     string `json:"status"`
+	TotalSize  int64  `json:"total_size"`
+	CreateTime int64  `json:"create_time"`
+	RootPath   string `json:"root_path"`
 }
 
 type LunDevAttrib struct {
@@ -82,9 +83,9 @@ type LunUpdateSpec struct {
 }
 
 type LunCloneSpec struct {
-	Name            string
-	SrcLunUuid      string
-	Location        string
+	Name       string
+	SrcLunUuid string
+	Location   string
 }
 
 type TargetCreateSpec struct {
@@ -340,6 +341,21 @@ func (dsm *DSM) TargetCreate(spec TargetCreateSpec) (string, error) {
 	}
 
 	return strconv.Itoa(trgResp.TargetId), nil
+}
+
+func (dsm *DSM) TargetDisconnectSession(targetId string, sessionIqn string) error {
+	params := url.Values{}
+	params.Add("api", "SYNO.Core.ISCSI.Target")
+	params.Add("method", "disconnect")
+	params.Add("version", "1")
+	params.Add("target_id", strconv.Quote(targetId))
+	params.Add("session_id", strconv.Quote(sessionIqn))
+
+	resp, err := dsm.sendRequest("", &struct{}{}, params, "webapi/entry.cgi")
+	if err != nil {
+		return errCodeMapping(resp.ErrorCode, err)
+	}
+	return nil
 }
 
 func (dsm *DSM) LunMapTarget(targetIds []string, lunUuid string) error {

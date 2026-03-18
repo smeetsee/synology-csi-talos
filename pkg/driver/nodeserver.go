@@ -203,7 +203,15 @@ func (ns *nodeServer) loginTarget(volumeId string) ([]string, error) {
 	// Assume target and lun 1-1 mapping
 	mappingIndex := k8sVolume.Target.MappedLuns[0].MappingIndex
 	for _, portal := range portals {
-		if err := ns.Initiator.login(k8sVolume.Target.Iqn, portal); err != nil {
+		err := ns.Initiator.login(k8sVolume.Target.Iqn, portal)
+		if err != nil && strings.Contains(err.Error(), "exit status 19") {
+			log.Infof("Stale iSCSI session for %s, disconnecting via DSM and retrying", k8sVolume.Target.Iqn)
+			if discErr := ns.dsmService.DisconnectIscsiSessions(k8sVolume.Target.Iqn); discErr != nil {
+				log.Warnf("Failed to disconnect stale sessions: %v", discErr)
+			}
+			err = ns.Initiator.login(k8sVolume.Target.Iqn, portal)
+		}
+		if err != nil {
 			return nil, status.Errorf(codes.Internal,
 				fmt.Sprintf("Failed to login with target iqn [%s], err: %v", k8sVolume.Target.Iqn, err))
 		}
