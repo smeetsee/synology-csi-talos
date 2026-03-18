@@ -343,21 +343,6 @@ func (dsm *DSM) TargetCreate(spec TargetCreateSpec) (string, error) {
 	return strconv.Itoa(trgResp.TargetId), nil
 }
 
-func (dsm *DSM) TargetDisconnectSession(targetId string, sessionIqn string) error {
-	params := url.Values{}
-	params.Add("api", "SYNO.Core.ISCSI.Target")
-	params.Add("method", "disconnect")
-	params.Add("version", "1")
-	params.Add("target_id", strconv.Quote(targetId))
-	params.Add("session_id", strconv.Quote(sessionIqn))
-
-	resp, err := dsm.sendRequest("", &struct{}{}, params, "webapi/entry.cgi")
-	if err != nil {
-		return errCodeMapping(resp.ErrorCode, err)
-	}
-	return nil
-}
-
 func (dsm *DSM) LunMapTarget(targetIds []string, lunUuid string) error {
 	params := url.Values{}
 	params.Add("api", "SYNO.Core.ISCSI.LUN")
