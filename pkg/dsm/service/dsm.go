@@ -937,7 +937,7 @@ func (service *DsmService) DisconnectIscsiSessions(targetIqn string) error {
 			}
 			for _, session := range target.ConnectedSessions {
 				log.Infof("Disconnecting stale iSCSI session from %s on target %s", session.Ip, targetIqn)
-				if err := dsm.TargetDisconnectSessions(strconv.Itoa(target.TargetId)); err != nil {
+				if err := dsm.TargetDisconnectSession(strconv.Itoa(target.TargetId), session.Iqn); err != nil {
 					log.Errorf("DSM API disconnect failed for target %s: %v", targetIqn, err)
 					return err
 				}
