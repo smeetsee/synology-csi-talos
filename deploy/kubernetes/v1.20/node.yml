@@ -86,7 +86,7 @@ spec:
         - name: csi-plugin
           securityContext:
             privileged: true
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           image: ghcr.io/smeetsee/synology-csi-talos:main
           args:
             - --nodeid=$(KUBE_NODE_NAME)
