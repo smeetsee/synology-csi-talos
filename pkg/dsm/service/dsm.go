@@ -931,15 +931,19 @@ func (service *DsmService) DisconnectIscsiSessions(targetIqn string) error {
 			if target.Iqn != targetIqn {
 				continue
 			}
+			if len(target.ConnectedSessions) == 0 {
+				log.Infof("No connected sessions found on NAS for target %s", targetIqn)
+				return nil
+			}
 			for _, session := range target.ConnectedSessions {
 				log.Infof("Disconnecting stale iSCSI session from %s on target %s", session.Ip, targetIqn)
-				dsm.TargetDisconnectSession(
-					strconv.Itoa(target.TargetId),
-					session.Iqn,
-				)
+				if err := dsm.TargetDisconnectSessions(strconv.Itoa(target.TargetId)); err != nil {
+					log.Errorf("DSM API disconnect failed for target %s: %v", targetIqn, err)
+					return err
+				}
 			}
 			return nil
 		}
 	}
-	return fmt.Errorf("target %s not found", targetIqn)
+	return fmt.Errorf("target %s not found on any DSM", targetIqn)
 }

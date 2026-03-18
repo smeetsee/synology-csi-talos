@@ -208,6 +208,9 @@ func (ns *nodeServer) loginTarget(volumeId string) ([]string, error) {
 			log.Infof("Stale iSCSI session for %s, disconnecting via DSM and retrying", k8sVolume.Target.Iqn)
 			if discErr := ns.dsmService.DisconnectIscsiSessions(k8sVolume.Target.Iqn); discErr != nil {
 				log.Warnf("Failed to disconnect stale sessions: %v", discErr)
+			} else {
+				log.Infof("Waiting for NAS to release session...")
+				time.Sleep(3 * time.Second)
 			}
 			err = ns.Initiator.login(k8sVolume.Target.Iqn, portal)
 		}
