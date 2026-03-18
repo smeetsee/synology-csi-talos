@@ -94,7 +94,6 @@ spec:
             - --client-info
             - /etc/synology/client-info.yml
             - --log-level=info
-            - --iscsiadm-path=/host-bin/iscsiadm
           env:
             - name: CSI_ENDPOINT
               value: unix://csi/csi.sock
@@ -102,12 +101,6 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            # Add host binaries to PATH for Talos iSCSI tools
-            - name: PATH
-              value: /host-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-            # Add host libraries for iSCSI dependencies
-            - name: LD_LIBRARY_PATH
-              value: /host-lib:/host-lib64
           volumeMounts:
             - name: kubelet-dir
               mountPath: /var/lib/kubelet
@@ -121,18 +114,6 @@ spec:
               mountPath: /host
             - name: device-dir
               mountPath: /dev
-            - name: host-sbin
-              mountPath: /host-bin
-              readOnly: true
-            - name: host-bin2
-              mountPath: /usr/bin
-              readOnly: true
-            - name: host-lib
-              mountPath: /host-lib
-              readOnly: true
-            - name: host-lib64
-              mountPath: /host-lib64
-              readOnly: true
       volumes:
         - name: kubelet-dir
           hostPath:
@@ -156,20 +137,4 @@ spec:
         - name: device-dir
           hostPath:
             path: /dev
-            type: Directory
-        - name: host-sbin
-          hostPath:
-            path: /usr/local/sbin
-            type: Directory
-        - name: host-bin2
-          hostPath:
-            path: /usr/bin
-            type: Directory
-        - name: host-lib
-          hostPath:
-            path: /usr/local/lib
-            type: Directory
-        - name: host-lib64
-          hostPath:
-            path: /lib
             type: Directory
