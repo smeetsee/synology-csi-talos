@@ -64,6 +64,7 @@ spec:
         app: node
         {{- include "synology-csi.selectorLabels" $ | nindent 8 }}
     spec:
+      hostPID: true
       {{- with .affinity }}
       affinity: {{- toYaml . | nindent 8 }}
       {{- end }}

@@ -1,15 +1,27 @@
 # Synology CSI Driver for Kubernetes
 
-The official [Container Storage Interface](https://github.com/container-storage-interface) driver for Synology NAS,
-modified for support with [Talos Linux](https://www.talos.dev).
+Modified the official [Container Storage Interface](https://github.com/container-storage-interface) driver for Synology NAS to work with talos.
 
-This repository also includes a [Helm chart](./charts/synology-csi) for convenience.
+This is done by changing the way that iscsiadmin is added to the pod that needs it. Talos has no shell, so 
+instead of a clean environment through chroot and env with PATH to where the binary normally resides, we find the process id of iscsid and run the binary in that namespace with nsenter directly.
+
+On talos this of course also means that you must allow this action from the pod on the host via hostPID: true, so think hard about your pod security policies and check that over all that your deployment is priveleged
+
+``` yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: synology-csi
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/enforce-version: latest
+```
 
 ### Container Images & Kubernetes Compatibility
 Driver Name: csi.san.synology.com
 | Driver Version                                                                   | Image                                                                 | Supported K8s Version |
 | -------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------- |
-| [v1.2.1](https://github.com/SynologyOpenSource/synology-csi/tree/release-v1.2.1) | [synology-csi:v1.2.1](https://hub.docker.com/r/synology/synology-csi) | 1.20+                 |
+| [v1.2.1](https://github.com/smeetsee/synology-csi-talos/tree/release-v1.2.1) | [synology-csi:v1.2.1](https://ghcr.io/smeetsee/synology-csi-talos) | 1.20+                 |
 
 
 
@@ -21,7 +33,7 @@ The Synology CSI driver supports:
 
 ## Installation
 ### Prerequisites
-- Kubernetes versions 1.19 or above
+- Kubernetes versions 1.19 or above running on talos
 - Synology NAS running:
     * DSM 7.0 or above
     * DSM UC 3.1 or above
@@ -33,9 +45,47 @@ The Synology CSI driver supports:
 1. Before installing the CSI driver, make sure you have created and initialized at least one **storage pool** and one **volume** on your DSM.
 2. Make sure that all the worker nodes in your Kubernetes cluster can connect to your DSM.
 3. After you complete the steps below, the *full* deployment of the CSI driver, including the snapshotter, will be installed. If you don’t need the **Snapshot** feature, you can install the *basic* deployment of the CSI driver instead.
+4. talos needs to have the ext-iscsid extension and if you want to use btrfs (for snapshotting for example) you need an additional extension for that
+
+#### Talos settings
+
+I've gotten this to work with this image, which has the btrfs and iscsi-tools plugins as well as qemu agent which you probably don't need.
+
+``` bash
+talosctl upgrade --nodes $someip \
+  --image factory.talos.dev/installer/018aa3e29b1eed6e84bcded84882e5c2b0f13e24998340393d9eb5244efd4520:v1.8.0
+```
+
+After which I updated the talos machine configs on each controlplane node as so:
+
+``` yaml
+version: v1alpha1
+machine:
+  type: controlplane 
+# ... removed for brevity
+    # # Configures the kernel.
+    kernel:
+        # Kernel modules to load.
+        modules:
+            - name: btrfs # Module name.
+```
+
+and on each worker node as so:
+
+``` yaml
+version: v1alpha1
+machine:
+  type: worker 
+# ... removed for brevity
+    # # Configures the kernel.
+    kernel:
+        # Kernel modules to load.
+        modules:
+            - name: btrfs # Module name.
+```
 
 ### Procedure
-1. Clone the git repository. `git clone https://github.com/zebernst/synology-csi-talos.git`
+1. Clone the git repository. `git clone https://github.com/smeetsee/synology-csi-talos.git`
 2. Enter the directory. `cd synology-csi`
 3. Copy the client-info-template.yml file. `cp config/client-info-template.yml config/client-info.yml`
 4. Edit `config/client-info.yml` to configure the connection information for DSM. You can specify **one or more** storage systems on which the CSI volumes will be created. Change the following parameters as needed:
@@ -52,7 +102,7 @@ The Synology CSI driver supports:
         - *basic*:
             `./scripts/deploy.sh build && ./scripts/deploy.sh install --basic`
 
-        If you don’t need to build the driver locally and want to pull the [image](https://hub.docker.com/r/synology/synology-csi) from Docker instead, run the command as instructed below.
+        If you don’t need to build the driver locally and want to pull the [image](https://hub.docker.com/r/dsoderlund/synology-csi-talos) from Docker instead, run the command as instructed below.
 
         - *full*:
             `./scripts/deploy.sh install --all`
@@ -240,7 +290,7 @@ Create and apply VolumeSnapshotClasses with the properties you want.
 
 ## Building & Manually Installing
 
-By default, the CSI driver will pull the latest [image](https://hub.docker.com/r/synology/synology-csi) from Docker Hub.
+By default, the CSI driver will pull the latest [image](https://hub.docker.com/r/dsoderlund/synology-csi-talos) from Docker Hub.
 
 If you want to use images you built locally for installation, edit all files under `deploy/kubernetes/<k8s version>/`  and make sure `imagePullPolicy: IfNotPresent` is included in every csi-plugin container.
 
