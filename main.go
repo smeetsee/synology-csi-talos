@@ -97,13 +97,15 @@ func findIscsidMntNs() (string, error) {
 			continue
 		}
 		cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
-		if err != nil {
+		if err != nil || len(cmdlineBytes) == 0 {
 			continue
 		}
-		cmdline := strings.ReplaceAll(string(cmdlineBytes), "\x00", " ")
-		if strings.Contains(cmdline, "iscsid") {
+		// cmdline is null-separated; first field is the executable path
+		executable := strings.SplitN(string(cmdlineBytes), "\x00", 2)[0]
+		if strings.HasSuffix(executable, "/iscsid") || executable == "iscsid" {
 			nsPath := filepath.Join("/proc", entry.Name(), "ns/mnt")
 			if _, err := os.Stat(nsPath); err == nil {
+				log.Infof("Found iscsid at PID %s (executable: %s)", entry.Name(), executable)
 				return nsPath, nil
 			}
 		}
