@@ -5,8 +5,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -59,6 +62,31 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func findIscsidPid() (int, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0, fmt.Errorf("failed to read /proc: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		cmdline := strings.ReplaceAll(string(cmdlineBytes), "\x00", " ")
+		if strings.Contains(cmdline, "iscsid") {
+			pid := 0
+			fmt.Sscanf(entry.Name(), "%d", &pid)
+			if pid > 0 {
+				return pid, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("iscsid process not found in /proc")
+}
+
 func driverStart() error {
 	log.Infof("CSI Options = {%s, %s, %s}", csiNodeID, csiEndpoint, csiClientInfoPath)
 
@@ -78,6 +106,21 @@ func driverStart() error {
 		}
 	}
 	defer dsmService.RemoveAllDsms()
+
+	// Auto-detect iscsid chroot dir for Talos if not explicitly set
+	if chrootDir == "" {
+		pid, err := findIscsidPid()
+		if err != nil {
+			log.Warnf("Could not find iscsid PID: %v", err)
+		} else {
+			chrootDir = fmt.Sprintf("/proc/%d/root", pid)
+			log.Infof("Auto-detected iscsid at PID %d, using chroot dir %s", pid, chrootDir)
+		}
+	}
+	if iscsiadmPath == "" {
+		iscsiadmPath = "/usr/local/sbin/iscsiadm"
+		log.Infof("Using default iscsiadm path: %s", iscsiadmPath)
+	}
 
 	// 2. Create command executor
 	cmdMap := map[string]string{
