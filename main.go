@@ -32,7 +32,7 @@ var (
 	webapiDebug    = false
 	multipathForUC = true
 	// Locations is tools and directories
-	chrootDir      = ""
+	mntNsPath      = ""
 	iscsiadmPath   = ""
 	multipathPath  = ""
 	multipathdPath = ""
@@ -87,6 +87,30 @@ func findIscsidPid() (int, error) {
 	return 0, fmt.Errorf("iscsid process not found in /proc")
 }
 
+func findIscsidMntNs() (string, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return "", fmt.Errorf("failed to read /proc: %v", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		cmdlineBytes, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		cmdline := strings.ReplaceAll(string(cmdlineBytes), "\x00", " ")
+		if strings.Contains(cmdline, "iscsid") {
+			nsPath := filepath.Join("/proc", entry.Name(), "ns/mnt")
+			if _, err := os.Stat(nsPath); err == nil {
+				return nsPath, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("iscsid process not found")
+}
+
 func driverStart() error {
 	log.Infof("CSI Options = {%s, %s, %s}", csiNodeID, csiEndpoint, csiClientInfoPath)
 
@@ -108,27 +132,25 @@ func driverStart() error {
 	defer dsmService.RemoveAllDsms()
 
 	// Auto-detect iscsid chroot dir for Talos if not explicitly set
-	if chrootDir == "" {
-		pid, err := findIscsidPid()
+	if mntNsPath == "" {
+		ns, err := findIscsidMntNs()
 		if err != nil {
-			log.Warnf("Could not find iscsid PID: %v", err)
+			log.Warnf("Could not find iscsid mount namespace: %v", err)
 		} else {
-			chrootDir = fmt.Sprintf("/proc/%d/root", pid)
-			log.Infof("Auto-detected iscsid at PID %d, using chroot dir %s", pid, chrootDir)
+			mntNsPath = ns
+			log.Infof("Auto-detected iscsid mount namespace: %s", mntNsPath)
 		}
 	}
 	if iscsiadmPath == "" {
 		iscsiadmPath = "/usr/local/sbin/iscsiadm"
-		log.Infof("Using default iscsiadm path: %s", iscsiadmPath)
 	}
 
-	// 2. Create command executor
 	cmdMap := map[string]string{
 		"iscsiadm":   iscsiadmPath,
 		"multipath":  multipathPath,
 		"multipathd": multipathdPath,
 	}
-	cmdExecutor, err := hostexec.New(cmdMap, chrootDir)
+	cmdExecutor, err := hostexec.New(cmdMap, mntNsPath)
 	if err != nil {
 		log.Errorf("Failed to create command executor: %v", err)
 		return err
@@ -169,7 +191,7 @@ func addFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&logLevel, "log-level", logLevel, "Log level (debug, info, warn, error, fatal)")
 	cmd.PersistentFlags().BoolVarP(&webapiDebug, "debug", "d", webapiDebug, "Enable webapi debugging logs")
 	cmd.PersistentFlags().BoolVar(&multipathForUC, "multipath", multipathForUC, "Set to 'false' to disable multipath for UC")
-	cmd.PersistentFlags().StringVar(&chrootDir, "chroot-dir", chrootDir, "Host directory to chroot into (empty disables chroot)")
+	cmd.PersistentFlags().StringVar(&mntNsPath, "mnt-ns-path", mntNsPath, "Mount namespace path of iscsid process (empty = auto-detect)")
 	cmd.PersistentFlags().StringVar(&iscsiadmPath, "iscsiadm-path", iscsiadmPath, "Full path of iscsiadm executable")
 	cmd.PersistentFlags().StringVar(&multipathPath, "multipath-path", multipathPath, "Full path of multipath executable")
 	cmd.PersistentFlags().StringVar(&multipathdPath, "multipathd-path", multipathdPath, "Full path of multipathd executable")

@@ -4,7 +4,6 @@ package hostexec
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -32,20 +31,17 @@ type Executor interface {
 type hostexec struct {
 	Executor
 	commandMap map[string]string
-	chrootDir  string
+	mntNsPath  string
 }
 
 // New creates an instance of hostexec to execute commands in the given environment
-func New(cmdMap map[string]string, chrootDir string) (Executor, error) {
-	// If chroot directory is defined, check that directory exists or return an error
-	if chrootDir != "" {
-		fileinfo, err := os.Stat(chrootDir)
-		if err != nil || !fileinfo.IsDir() {
-			return nil, errors.New("chroot directory does not exist or is not a directory")
+func New(cmdMap map[string]string, mntNsPath string) (Executor, error) {
+	if mntNsPath != "" {
+		if _, err := os.Stat(mntNsPath); err != nil {
+			return nil, fmt.Errorf("mount namespace path does not exist: %v", err)
 		}
 	}
-
-	return &hostexec{exec.New(), cmdMap, chrootDir}, nil
+	return &hostexec{exec.New(), cmdMap, mntNsPath}, nil
 }
 
 func (h *hostexec) resolveCmd(cmd string, args ...string) (string, []string) {
@@ -69,22 +65,18 @@ func (h *hostexec) wrapEnv(cmd string, args ...string) (string, []string) {
 	return cmd, args
 }
 
-func (h *hostexec) wrapChroot(cmd string, args ...string) (string, []string) {
-	if h.chrootDir == "" {
+func (h *hostexec) wrapNsenter(cmd string, args ...string) (string, []string) {
+	if h.mntNsPath == "" {
 		return cmd, args
 	}
-
-	args = append([]string{h.chrootDir, cmd}, args...)
-	cmd = "/usr/sbin/chroot"
-
+	args = append([]string{"--mount=" + h.mntNsPath, "--"}, append([]string{cmd}, args...)...)
+	cmd = "nsenter"
 	return cmd, args
 }
 
 func (h *hostexec) wrap(cmd string, args ...string) (string, []string) {
 	cmd, args = h.resolveCmd(cmd, args...)
-	cmd, args = h.wrapEnv(cmd, args...)
-	cmd, args = h.wrapChroot(cmd, args...)
-
+	cmd, args = h.wrapNsenter(cmd, args...)
 	return cmd, args
 }
 
